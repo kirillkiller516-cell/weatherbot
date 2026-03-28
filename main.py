@@ -9,7 +9,7 @@ from aiohttp import web
 
 # ТВОИ ДАННЫЕ ИЗ СКРИНШОТОВ
 TOKEN = "8713876155:AAGD-jf6GzQniAAoRV88cqr5iGSOxOXmgNw"
-API_KEY = "366885df4000302b55977926b668038c"
+API_KEY = "e28ac47d86461c98b2ed828671aae42b"
 MY_ID = 5459341496
 BRO_ID = 6871387615
 
