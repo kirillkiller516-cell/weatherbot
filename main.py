@@ -10,7 +10,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime
 from aiohttp import web
 
-# --- НАЛАШТУВАННЯ ---
+# --- НАСТРОЙКИ ---
 API_TOKEN = '8713876155:AAGD-jf6GzQniAAoRV88cqr5iGSOxOXmgNw' 
 WEATHER_KEY = 'e28ac47d86461c98b2ed828671aae42b'            
 MY_ID = 6874659279                                         
@@ -119,17 +119,21 @@ async def handle(request):
     return web.Response(text="Bot is live!")
 
 async def main():
-    # Налаштування розсилки на 7 ранку по Києву
+    # Настройка рассылки на 7:00 утра по Киеву
     scheduler.add_job(send_daily_reports, 'cron', hour=7, minute=0)
     scheduler.start()
     
+    # Запуск веб-сервера для Render и UptimeRobot
     app = web.Application()
     app.router.add_get('/', handle)
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
-    asyncio.create_task(site.start())
+    
+    port = int(os.getenv('PORT', 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
 
+    print(f"Бот запущен на порту {port}")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
