@@ -2,6 +2,7 @@ import os
 import asyncio
 import aiohttp
 import random
+import pytz
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
@@ -14,10 +15,11 @@ API_TOKEN = '8713876155:AAGD-jf6GzQniAAoRV88cqr5iGSOxOXmgNw'
 WEATHER_KEY = 'e28ac47d86461c98b2ed828671aae42b'            
 MY_ID = 6874659279                                         
 CITY = "Panasivka,UA" 
+UKRAINE_TZ = pytz.timezone('Europe/Kyiv')
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
-scheduler = AsyncIOScheduler()
+scheduler = AsyncIOScheduler(timezone=UKRAINE_TZ)
 
 FISHING_TIPS = [
     "🎣 Порада: На карася краще брати мастирку з анісом.",
@@ -33,15 +35,18 @@ def get_wind_direction(deg):
 
 async def get_weather_data():
     url = f"http://api.openweathermap.org/data/2.5/weather?q={CITY}&appid={WEATHER_KEY}&units=metric&lang=uk"
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            if resp.status == 200:
-                return await resp.json()
-            return None
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                return None
+    except:
+        return None
 
 async def get_fishing_forecast():
     res = await get_weather_data()
-    if not res: return "🚨 Помилка отримання даних (перевір пошту)."
+    if not res: return "🚨 Помилка отримання даних (перевір пошту OpenWeather)."
     
     temp = res['main']['temp']
     press = res['main']['pressure'] * 0.750064
@@ -51,9 +56,10 @@ async def get_fishing_forecast():
     desc = res['weather'][0]['description']
     status = "✅ Можна їхати!" if 742 <= press <= 758 and wind_speed <= 6 else "⚠️ Умови складні"
     
+    now = datetime.now(UKRAINE_TZ)
     return (f"🎣 **РИБАЛЬСЬКИЙ МОНІТОР**\n"
             f"━━━━━━━━━━━━━━━\n"
-            f"⏰ Оновлено: {datetime.now().strftime('%H:%M:%S')}\n"
+            f"⏰ Оновлено: {now.strftime('%H:%M:%S')}\n"
             f"☁️ Стан: {desc.capitalize()}\n"
             f"🌡 Темп: {temp}°C | 💎 Тиск: {int(press)}\n"
             f"🚩 Вітер: {wind_dir}, {wind_speed} м/с\n"
@@ -65,20 +71,12 @@ async def get_school_calendar():
     res = await get_weather_data()
     if not res: return "🚨 Помилка отримання даних."
     
+    now = datetime.now(UKRAINE_TZ)
     days = ["Понеділок", "Вівторок", "Середа", "Четвер", "П'ятниця", "Субота", "Неділя"]
-    weekday = days[datetime.now().weekday()]
-    date_str = datetime.now().strftime("%d.%m.%Y")
+    weekday = days[now.weekday()]
+    
     temp = res['main']['temp']
-    wind_deg = res['wind'].get('deg', 0)
-    wind_dir = get_wind_direction(wind_deg)
     clouds = res['clouds']['all']
-    
-    rain = res.get('rain', {}).get('1h', 0)
-    snow = res.get('snow', {}).get('1h', 0)
-    osadi = "—"
-    if rain > 0: osadi = "Дощ 🌧"
-    elif snow > 0: osadi = "Сніг ❄️"
-    
     cloud_text = "Безхмарно ☀️"
     if 10 < clouds <= 30: cloud_text = "Невелика 🌤"
     elif 30 < clouds <= 70: cloud_text = "Мінлива ⛅️"
@@ -86,46 +84,50 @@ async def get_school_calendar():
 
     return (f"📅 **ШКІЛЬНИЙ КАЛЕНДАР ПОГОДИ**\n"
             f"━━━━━━━━━━━━━━━\n"
-            f"🗓 Дата: {date_str} ({weekday})\n"
-            f"🌡 Температура повітря: {int(temp)}°C\n"
+            f"🗓 Дата: {now.strftime('%d.%m.%Y')} ({weekday})\n"
+            f"🌡 Температура: {int(temp)}°C\n"
             f"☁️ Хмарність: {cloud_text}\n"
-            f"💧 Опади: {osadi}\n"
-            f"🚩 Вітер: {wind_dir}\n"
+            f"🚩 Вітер: {get_wind_direction(res['wind'].get('deg', 0))}\n"
             f"━━━━━━━━━━━━━━━")
+
+async def send_daily_reports():
+    fish = await get_fishing_forecast()
+    school = await get_school_calendar()
+    try:
+        await bot.send_message(MY_ID, fish, parse_mode="Markdown")
+        await asyncio.sleep(1)
+        await bot.send_message(MY_ID, school, parse_mode="Markdown")
+    except:
+        pass
 
 @dp.message(Command("start"))
 async def start(message: types.Message):
     builder = ReplyKeyboardBuilder()
     builder.row(types.KeyboardButton(text="🎣 Рибальський звіт"))
     builder.row(types.KeyboardButton(text="📚 Шкільний календар"))
-    await message.answer("Привіт! Оновив формат шкільного календаря.", reply_markup=builder.as_markup(resize_keyboard=True))
+    await message.answer("Бот активний! Обирай звіт:", reply_markup=builder.as_markup(resize_keyboard=True))
 
-@dp.message(lambda message: message.text == "🎣 Рибальський звіт")
-async def manual_fishing(message: types.Message):
-    text = await get_fishing_forecast()
-    await message.answer(text, parse_mode="Markdown")
+@dp.message(lambda m: m.text == "🎣 Рибальський звіт")
+async def manual_fishing(m: types.Message):
+    await m.answer(await get_fishing_forecast(), parse_mode="Markdown")
 
-@dp.message(lambda message: message.text == "📚 Шкільний календар")
-async def manual_school(message: types.Message):
-    text = await get_school_calendar()
-    await message.answer(text, parse_mode="Markdown")
+@dp.message(lambda m: m.text == "📚 Шкільний календар")
+async def manual_school(m: types.Message):
+    await m.answer(await get_school_calendar(), parse_mode="Markdown")
 
-# Для Render (порт)
 async def handle(request):
-    return web.Response(text="Bot is running!")
+    return web.Response(text="Bot is live!")
 
 async def main():
-    # Рассылка в 07:00 и 08:00
-    scheduler.add_job(lambda: asyncio.create_task(bot.send_message(MY_ID, asyncio.run(get_fishing_forecast()), parse_mode="Markdown")), 'cron', hour=7, minute=0)
-    scheduler.add_job(lambda: asyncio.create_task(bot.send_message(MY_ID, asyncio.run(get_school_calendar()), parse_mode="Markdown")), 'cron', hour=8, minute=0)
+    # Налаштування розсилки на 7 ранку по Києву
+    scheduler.add_job(send_daily_reports, 'cron', hour=7, minute=0)
     scheduler.start()
     
     app = web.Application()
     app.router.add_get('/', handle)
     runner = web.AppRunner(app)
     await runner.setup()
-    port = int(os.getenv('PORT', 8080))
-    site = web.TCPSite(runner, '0.0.0.0', port)
+    site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
     asyncio.create_task(site.start())
 
     await dp.start_polling(bot)
