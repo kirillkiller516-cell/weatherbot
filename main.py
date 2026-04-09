@@ -13,7 +13,7 @@ from aiohttp import web
 # --- НАСТРОЙКИ ---
 API_TOKEN = '8713876155:AAGD-jf6GzQniAAoRV88cqr5iGSOxOXmgNw' 
 WEATHER_KEY = 'e28ac47d86461c98b2ed828671aae42b'            
-MY_ID = 6874659279                                         
+MY_ID = 8668738378                                         
 CITY = "Panasivka,UA" 
 UKRAINE_TZ = pytz.timezone('Europe/Kyiv')
 
