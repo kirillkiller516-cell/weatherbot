@@ -54,7 +54,13 @@ async def get_fishing_forecast():
     wind_deg = res['wind'].get('deg', 0)
     wind_dir = get_wind_direction(wind_deg)
     desc = res['weather'][0]['description']
-    status = "✅ Можна їхати!" if 742 <= press <= 758 and wind_speed <= 6 else "⚠️ Умови складні"
+    
+    # Опади (якщо є)
+    rain = res.get('rain', {}).get('1h', 0)
+    snow = res.get('snow', {}).get('1h', 0)
+    precip = f"{rain} мм (дощ)" if rain > 0 else (f"{snow} мм (сніг)" if snow > 0 else "Відсутні")
+    
+    status = "✅ Можна їхати!" if 742 <= press <= 758 and wind_speed <= 6 and rain == 0 else "⚠️ Умови складні"
     
     now = datetime.now(UKRAINE_TZ)
     return (f"🎣 **РИБАЛЬСЬКИЙ МОНІТОР**\n"
@@ -62,6 +68,7 @@ async def get_fishing_forecast():
             f"⏰ Оновлено: {now.strftime('%H:%M:%S')}\n"
             f"☁️ Стан: {desc.capitalize()}\n"
             f"🌡 Темп: {temp}°C | 💎 Тиск: {int(press)}\n"
+            f"💧 Опади: {precip}\n"
             f"🚩 Вітер: {wind_dir}, {wind_speed} м/с\n"
             f"━━━━━━━━━━━━━━━\n"
             f"**ВЕРДИКТ: {status}**\n\n"
@@ -76,7 +83,16 @@ async def get_school_calendar():
     weekday = days[now.weekday()]
     
     temp = res['main']['temp']
-    clouds = res['clouds']['all']
+    humidity = res['main']['humidity']
+    clouds = res['clouds'].get('all', 0)
+    
+    # Опади
+    rain = res.get('rain', {}).get('1h', 0)
+    snow = res.get('snow', {}).get('1h', 0)
+    precip_text = "без опадів"
+    if rain > 0: precip_text = f"дощ ({rain}мм)"
+    elif snow > 0: precip_text = f"сніг ({snow}мм)"
+
     cloud_text = "Безхмарно ☀️"
     if 10 < clouds <= 30: cloud_text = "Невелика 🌤"
     elif 30 < clouds <= 70: cloud_text = "Мінлива ⛅️"
@@ -87,6 +103,7 @@ async def get_school_calendar():
             f"🗓 Дата: {now.strftime('%d.%m.%Y')} ({weekday})\n"
             f"🌡 Температура: {int(temp)}°C\n"
             f"☁️ Хмарність: {cloud_text}\n"
+            f"💧 Вологість: {humidity}% ({precip_text})\n"
             f"🚩 Вітер: {get_wind_direction(res['wind'].get('deg', 0))}\n"
             f"━━━━━━━━━━━━━━━")
 
@@ -126,7 +143,8 @@ async def main():
     # Запуск веб-сервера для Render и UptimeRobot
     app = web.Application()
     app.router.add_get('/', handle)
-    runner = web.AppRunner(app)
+    # Настройка логгера для aiohttp, чтобы не спамил в консоль
+    runner = web.AppRunner(app, access_log=None)
     await runner.setup()
     
     port = int(os.getenv('PORT', 8080))
